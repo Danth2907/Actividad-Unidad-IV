@@ -1,8 +1,23 @@
-// server.js
-
 import express from 'express';
+import mysql from 'mysql2';
+
 const app = express();
 const PORT = 3000;
+
+const connection = mysql.createConnection({
+  host: 'localhost',
+  user: 'Durán',
+  password: '12345',
+  database: 'todolist'
+});
+
+connection.connect(err => {
+  if (err) {
+    console.error('Error conectando a la base de datos:', err);
+    return;
+  }
+  console.log('Conectado a la base de datos MySQL');
+});
 
 const generateApiKey = () => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -27,11 +42,50 @@ const checkAuthorization = (req, res, next) => {
 
 app.use(express.json());
 
-let tasks = [];
-let goals = [];
-
 app.get('/getTasks', checkAuthorization, (req, res) => {
-  return res.status(200).json(tasks);
+  connection.query('SELECT * FROM tareas', (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al obtener las tareas' });
+    }
+    return res.status(200).json(results);
+  });
+});
+
+app.get('/getGoals', checkAuthorization, (req, res) => {
+  connection.query('SELECT * FROM goals', (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al obtener las metas' });
+    }
+    return res.status(200).json(results);
+  });
+});
+
+app.post('/addTask', checkAuthorization, (req, res) => {
+  const { name, description, deadline } = req.body;
+  if (!name || !description || !deadline) {
+    return res.status(400).json({ message: 'Faltan parámetros' });
+  }
+  const query = 'INSERT INTO tareas (name, description, deadline) VALUES (?, ?, ?)';
+  connection.query(query, [name, description, deadline], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al agregar la tarea' });
+    }
+    return res.status(200).json({ message: 'Tarea agregada exitosamente', id: results.insertId });
+  });
+});
+
+app.post('/addGoal', checkAuthorization, (req, res) => {
+  const { name, description, deadline } = req.body;
+  if (!name || !description || !deadline) {
+    return res.status(400).json({ message: 'Faltan parámetros' });
+  }
+  const query = 'INSERT INTO goals (name, description, deadline) VALUES (?, ?, ?)';
+  connection.query(query, [name, description, deadline], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al agregar la meta' });
+    }
+    return res.status(200).json({ message: 'Meta agregada exitosamente', id: results.insertId });
+  });
 });
 
 app.delete('/removeTask', checkAuthorization, (req, res) => {
@@ -39,19 +93,13 @@ app.delete('/removeTask', checkAuthorization, (req, res) => {
   if (!taskId) {
     return res.status(400).json({ message: 'Falta el parámetro taskId' });
   }
-  tasks = tasks.filter(task => task.id !== taskId);
-  return res.status(200).json({ message: 'Tarea eliminada exitosamente' });
-});
-
-app.post('/addTask', checkAuthorization, (req, res) => {
-  const { name, description, deadline } = req.body;
-  const newTask = { id: tasks.length + 1, name, description, deadline };
-  tasks.push(newTask);
-  return res.status(200).json({ message: 'Tarea agregada exitosamente' });
-});
-
-app.get('/getGoals', checkAuthorization, (req, res) => {
-  return res.status(200).json(goals);
+  const query = 'DELETE FROM tareas WHERE id = ?';
+  connection.query(query, [taskId], (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al eliminar la tarea' });
+    }
+    return res.status(200).json({ message: 'Tarea eliminada exitosamente' });
+  });
 });
 
 app.delete('/removeGoal', checkAuthorization, (req, res) => {
@@ -59,15 +107,13 @@ app.delete('/removeGoal', checkAuthorization, (req, res) => {
   if (!goalId) {
     return res.status(400).json({ message: 'Falta el parámetro goalId' });
   }
-  goals = goals.filter(goal => goal.id !== goalId);
-  return res.status(200).json({ message: 'Meta eliminada exitosamente' });
-});
-
-app.post('/addGoal', checkAuthorization, (req, res) => {
-  const { name, description, deadline } = req.body;
-  const newGoal = { id: goals.length + 1, name, description, deadline };
-  goals.push(newGoal);
-  return res.status(200).json({ message: 'Meta agregada exitosamente' });
+  const query = 'DELETE FROM goals WHERE id = ?';
+  connection.query(query, [goalId], (err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error al eliminar la meta' });
+    }
+    return res.status(200).json({ message: 'Meta eliminada exitosamente' });
+  });
 });
 
 app.listen(PORT, () => {
